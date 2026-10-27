@@ -24,9 +24,12 @@ Python. This project publishes them: the official python image plus a JRE and th
    the minor (`4.2.0-python3.14`) and the full version (`4.2.0-python3.14.10`). Each build also pushes a
    minor-level tag `<major.minor>-python<python>` and a dated tag `<spark>-python<python>-<YYYYMMDD>` for pinning.
    Spark, Python, pandas and pyarrow versions are bumped by Renovate (Mend app) pull requests, patch-only per row,
-   each one smoke-tested by CI before merge; patch-level and action updates automerge once `ci-ok` is green.
-2. Contents, built in stages so the final image is lean: final stage is the official `python:<python>-slim-bookworm`
-   image (Python maintained by Docker's official images, every version, amd64 and arm64, pip included); the JRE is
+   each one smoke-tested by CI before merge; patch-level and action updates automerge once `ci-ok` is green. New
+   Spark minor or major lines (4.3, 5.0) and new Python lines (3.15) are found by a daily discovery check against
+   Docker Hub that opens an auto-merging pull request adding the row (or the Python to the newest Spark major's
+   rows); the smoke test is the arbiter, a failing row is trimmed by hand.
+2. Contents, built in stages so the final image is lean: final stage is the official `python:<python>-slim`
+   image (Debian's current stable for that Python line) (Python maintained by Docker's official images, every version, amd64 and arm64, pip included); the JRE is
    copied from `eclipse-temurin:<java>-jre-jammy` (a JRE, the stock Spark image ships a full JDK); `/opt/spark`,
    `/opt/entrypoint.sh` and `/opt/decom.sh` are copied from the stock `spark:<spark>-scala<scala>-java<java>-ubuntu`
    image; `pandas` and `pyarrow` installed with pip from a pinned `requirements.txt`, no compiled bytecode (Arrow and pandas UDFs work out of the
