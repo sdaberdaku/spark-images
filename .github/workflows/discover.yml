@@ -48,8 +48,13 @@ jobs:
           set -euo pipefail
           # Only same-repo PRs: a fork PR with a discover/ head branch must not break this step.
           # Close and redo only when every commit is from the bot; otherwise fail so the owner is emailed.
+          # A commit counts as the bot's when the bot authored it and the bot or GitHub (a rebase) committed it.
+          bot='41898282+github-actions[bot]@users.noreply.github.com'
           redo() {
-            if [ "$(gh pr view "$1" --json commits --jq '[.commits[].authors[].login] | all(. == "github-actions[bot]")')" = true ]; then
+            number=$(gh pr view "$1" --json number -q .number)
+            others=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number/commits" --paginate \
+              --jq ".[] | select(.commit.author.email != \"$bot\" or (.commit.committer.email != \"$bot\" and .commit.committer.email != \"noreply@github.com\")) | .sha")
+            if [ -z "$others" ]; then
               gh pr close "$1" --delete-branch
             else
               echo "::error::Discovery pull request on $1 ($2) has commits that are not from github-actions[bot]; fix or close it by hand."
@@ -57,7 +62,9 @@ jobs:
             fi
           }
           skip=false
-          for branch in $(gh pr list --state open --json headRefName,isCrossRepository --jq '.[] | select((.isCrossRepository|not) and (.headRefName|startswith("discover/"))) | .headRefName'); do
+          # Assigned on its own line so that a failing gh call stops the step under set -e.
+          branches=$(gh pr list --state open --json headRefName,isCrossRepository --jq '.[] | select((.isCrossRepository|not) and (.headRefName|startswith("discover/"))) | .headRefName')
+          for branch in $branches; do
             state=$(gh pr view "$branch" --json mergeStateStatus -q .mergeStateStatus)
             echo "Open discovery pull request on $branch ($state)."
             case "$state" in
