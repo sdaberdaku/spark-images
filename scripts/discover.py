@@ -100,7 +100,8 @@ def main(argv):
     new_rows, added = discover(rows, spark_tags, fetch_tags("python", "-slim"))
     if added and "--dry-run" not in argv:
         path.write_text(serialize(new_rows))
-    print("\n".join(added))
+    if added:
+        print("\n".join(added))
     return 0
 
 
