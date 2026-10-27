@@ -3,8 +3,8 @@
 # request triggers ci.yml itself (a ci.yml dispatch is the fallback when no run
 # shows up) and auto-merges once `ci-ok` is green. Each run also repairs an open
 # discovery pull request (rebase when behind, close and redo when conflicting)
-# and dispatches publish.yml when the latest images.json commit on main has no
-# publish run.
+# and dispatches publish.yml when no publish run was created since the latest
+# images.json commit on main.
 name: discover
 
 on:
@@ -31,12 +31,15 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Publish the latest images.json commit when it has no publish run
+      - name: Dispatch publish when no publish run followed the latest images.json commit
+        # A merge that touched images.json normally triggers publish itself; this only covers a merge that triggered nothing. Any publish run created since that commit counts, whatever its status.
         run: |
           set -euo pipefail
           last=$(gh api "repos/$GITHUB_REPOSITORY/commits?path=images.json&sha=main&per_page=1" -q '.[0].sha')
-          if [ "$(gh run list -w publish.yml -c "$last" --json databaseId -q 'length')" = 0 ]; then
-            echo "No publish run for $last: dispatching publish.yml on main."
+          since=$(gh api "repos/$GITHUB_REPOSITORY/commits/$last" -q .commit.committer.date)
+          n=$(gh run list -w publish.yml -b main --limit 50 --json createdAt -q "[.[] | select(.createdAt >= \"$since\")] | length")
+          if [ "$n" = 0 ]; then
+            echo "No publish run since $last ($since): dispatching publish.yml on main."
             gh workflow run publish.yml --ref main
           fi
       - name: Repair an open discovery pull request or clear stale branches
@@ -53,8 +56,12 @@ jobs:
                 continue
                 ;;
               BEHIND)
+                old=$(gh pr view "$branch" --json headRefOid -q .headRefOid)
                 gh pr update-branch "$branch" --rebase
-                sleep 5
+                for _ in $(seq 12); do
+                  [ "$(gh pr view "$branch" --json headRefOid -q .headRefOid)" != "$old" ] && break
+                  sleep 5
+                done
                 ;;
             esac
             scripts/ensure_ci.sh "$branch"
