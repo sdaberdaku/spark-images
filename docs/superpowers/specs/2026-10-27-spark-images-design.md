@@ -12,9 +12,17 @@ Python. This project publishes them: the stock Spark image plus one uv-managed C
 
 ## Goals
 
-1. `ghcr.io/sdaberdaku/spark:<spark>-python<python>` for Spark {4.1.2, 4.2.0} x Python {3.11, 3.12, 3.13, 3.14},
-   amd64 and arm64. Each build also pushes a dated tag `<spark>-python<python>-<YYYYMMDD>` for pinning.
-2. Contents: `FROM spark:<spark>-scala2.13-java21-ubuntu` (the Python-less stock image), CPython from uv's
+1. `ghcr.io/sdaberdaku/spark:<spark>-python<python>` for the latest patch of every Spark minor from 3.5 up, with
+   the Python versions that PySpark line supports (uv has no 3.10 reason to exist here: the stock `-python3`
+   images already ship 3.10):
+   - 3.5.9 (Scala 2.12, Java 17): Python 3.11, 3.12 (3.12 is not in PySpark 3.5's classifiers; the smoke test
+     decides whether the row stays)
+   - 4.0.4 (Scala 2.13, Java 21): Python 3.11, 3.12, 3.13
+   - 4.1.3 (Scala 2.13, Java 21): Python 3.11, 3.12, 3.13, 3.14
+   - 4.2.0 (Scala 2.13, Java 21): Python 3.11, 3.12, 3.13, 3.14
+   amd64 and arm64. Each build also pushes a minor-level tag `<major.minor>-python<python>` and a dated tag
+   `<spark>-python<python>-<YYYYMMDD>` for pinning. Patch bumps are a one-line change in `images.json`.
+2. Contents: `FROM spark:<spark>-scala<scala>-java<java>-ubuntu` (the Python-less stock image), CPython from uv's
    python-build-standalone in `/opt/python`, a venv in `/opt/venv` with `pandas` and `pyarrow` (Arrow and pandas
    UDFs work out of the box), `PYSPARK_PYTHON` and `PYSPARK_DRIVER_PYTHON` set to the venv, `uv` removed from the
    final image, `USER spark`. Works as a Spark on Kubernetes executor, driver and Spark Connect server image.
@@ -26,12 +34,13 @@ Python. This project publishes them: the stock Spark image plus one uv-managed C
 
 - Extra jars (Iceberg, Delta, cloud SDKs, JDBC drivers): users extend the image. The README shows how.
 - Python packages beyond pandas and pyarrow.
-- Spark 3.x.
-- Scala 2.12 or Java 17 variants.
+- Spark before 3.5.
+- More than one Scala or Java variant per Spark minor (the defaults above).
 
 ## Constraints
 
-- One Dockerfile; the matrix lives in `images.json`. Build args `SPARK_VERSION`, `PYTHON_VERSION`, `UV_VERSION`.
+- One Dockerfile; the matrix lives in `images.json`. Build args `SPARK_VERSION`, `SCALA_VERSION`, `JAVA_VERSION`,
+  `PYTHON_VERSION`, `UV_VERSION`.
 - Image labels `org.opencontainers.image.source`, `.licenses=Apache-2.0`, `.description`.
 - Workflows use `GITHUB_TOKEN` only (`packages: write`); no personal tokens.
 - `main` protected: pull request, `ci-ok`, linear history. Drafts do not run CI.
