@@ -46,18 +46,31 @@ jobs:
         id: open
         run: |
           set -euo pipefail
+          # Only same-repo PRs: a fork PR with a discover/ head branch must not break this step.
+          # Close and redo only when every commit is from the bot; otherwise fail so the owner is emailed.
+          redo() {
+            if [ "$(gh pr view "$1" --json commits --jq '[.commits[].authors[].login] | all(. == "github-actions[bot]")')" = true ]; then
+              gh pr close "$1" --delete-branch
+            else
+              echo "::error::Discovery pull request on $1 ($2) has commits that are not from github-actions[bot]; fix or close it by hand."
+              exit 1
+            fi
+          }
           skip=false
-          for branch in $(gh pr list --state open --json headRefName --jq '.[].headRefName | select(startswith("discover/"))'); do
+          for branch in $(gh pr list --state open --json headRefName,isCrossRepository --jq '.[] | select((.isCrossRepository|not) and (.headRefName|startswith("discover/"))) | .headRefName'); do
             state=$(gh pr view "$branch" --json mergeStateStatus -q .mergeStateStatus)
             echo "Open discovery pull request on $branch ($state)."
             case "$state" in
               DIRTY)
-                gh pr close "$branch" --delete-branch
+                redo "$branch" "conflicting"
                 continue
                 ;;
               BEHIND)
                 old=$(gh pr view "$branch" --json headRefOid -q .headRefOid)
-                gh pr update-branch "$branch" --rebase
+                if ! gh pr update-branch "$branch" --rebase; then
+                  redo "$branch" "rebase refused"
+                  continue
+                fi
                 for _ in $(seq 12); do
                   [ "$(gh pr view "$branch" --json headRefOid -q .headRefOid)" != "$old" ] && break
                   sleep 5
@@ -92,7 +105,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           branch="discover/$(date -u +%Y%m%d)"
-          summary=$(sed -e 's/^spark /Spark /' -e 's/^python /Python /' additions.txt | paste -sd, - | sed 's/,/, /g')
+          summary=$(sed -e 's/^spark /Spark /' -e 's/^python /Python /' additions.txt | awk '{printf "%s%s", (NR>1?", ":""), $0}')
           git switch -c "$branch"
           git add images.json
           git commit -m "feat(images): add $summary"
