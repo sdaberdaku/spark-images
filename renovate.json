@@ -1,0 +1,34 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "enabledManagers": ["dockerfile", "github-actions", "pip_requirements", "custom.regex"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^images\\.json$/"],
+      "matchStrings": ["\"spark\": \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "spark",
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^images\\.json$/"],
+      "matchStrings": ["(?:\\[|, )\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "python",
+      "versioningTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {"matchManagers": ["dockerfile"], "matchDepNames": ["eclipse-temurin", "spark", "python"], "enabled": false},
+    {"matchDepNames": ["spark", "python"], "matchUpdateTypes": ["minor", "major"], "enabled": false},
+    {"matchUpdateTypes": ["patch", "pin", "digest"], "automerge": true},
+    {"matchManagers": ["github-actions"], "automerge": true},
+    {"matchManagers": ["pip_requirements"], "matchUpdateTypes": ["minor", "patch"], "automerge": true}
+  ],
+  "platformAutomerge": true,
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 4,
+  "labels": ["dependencies"]
+}
