@@ -37,6 +37,14 @@ class SparkTest(unittest.TestCase):
         rows, _ = discover.add_spark(ROWS, ["4.3.0-scala2.12-java17-ubuntu", "4.3.0-scala2.12-java25-ubuntu"])
         self.assertEqual((rows[-1]["scala"], rows[-1]["java"]), ("2.12", "25"))
 
+    def test_lines_ordered_numerically(self):
+        rows, added = discover.add_spark(ROWS, spark_tags("4.9.0", "4.10.0"))
+        self.assertEqual(added, ["spark 4.9", "spark 4.10"])
+
+    def test_only_java25_offered(self):
+        rows, _ = discover.add_spark(ROWS, ["4.3.0-scala2.13-java25-ubuntu"])
+        self.assertEqual((rows[-1]["scala"], rows[-1]["java"]), ("2.13", "25"))
+
     def test_input_rows_not_mutated(self):
         discover.add_spark(ROWS, spark_tags("4.3.0"))
         self.assertEqual(len(ROWS), 2)
