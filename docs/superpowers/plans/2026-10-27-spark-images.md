@@ -127,3 +127,55 @@ Expected: no findings
 Expected: `cleanup` completes without deleting anything on the first run (nothing older than 90 days); its log lists the versions it considered.
 
 - [ ] **Step 3: Report** the run URL and what the cleanup log shows.
+
+---
+
+### Task 5: Renovate, pinned inputs, no cron
+
+**Files:**
+- Create: `renovate.json`, `requirements.txt`, `scripts/render_readme.py`, `tests/test_render_readme.py`
+- Modify: `images.json`, `Dockerfile`, `.github/workflows/publish.yml`, `.github/workflows/ci.yml` (if it reads python from images.json, nothing changes; verify), `README.md`
+
+**Interfaces:**
+- `images.json`: Python entries become full versions, the current patch of each line as published on Docker Hub for `python:<ver>-slim` (look them up with `curl -s "https://hub.docker.com/v2/repositories/library/python/tags?page_size=100&name=-slim"`, keep only `^\d+\.\d+\.\d+-slim$`): e.g. `"python": ["3.11.x", "3.12.x", "3.13.x", "3.14.x"]`.
+- `Dockerfile`: `FROM python:${PYTHON_VERSION}-slim` (the `-slim` tag follows Debian's current stable for that Python line, so new Python lines that Docker only ships on a newer Debian still build; the apt package list is the same on bookworm and trixie); pandas and pyarrow installed with `pip install --no-cache-dir --no-compile -r /tmp/requirements.txt` from `COPY requirements.txt /tmp/requirements.txt`; `requirements.txt` pins `pandas==<current>` and `pyarrow==<current>` (current PyPI versions).
+- `plan` jobs (ci.yml and publish.yml): the jq expansion adds `python_minor` (`.python | split(".")[:2] | join(".")`) next to `python`; the smoke test receives `python_minor`... no: `test/smoke.sh IMAGE PYTHON_VERSION` asserts the `Python X.Y.` prefix, so pass the full version and change the assertion to the exact `Python <full>` string (update smoke.sh accordingly).
+- publish.yml tags per row: `ghcr.io/sdaberdaku/spark:${spark}-python${python_minor}`, `ghcr.io/sdaberdaku/spark:${spark}-python${python}` (full), `ghcr.io/sdaberdaku/spark:${minor}-python${python_minor}`, `ghcr.io/sdaberdaku/spark:${spark}-python${python_minor}-${DATE}`. Remove the `schedule:` trigger; keep `push: branches: [main]` and `workflow_dispatch`. The cleanup job's dated-tag pattern must still match the dated tag form.
+- `renovate.json` (schema `https://docs.renovatebot.com/renovate-schema.json`): `extends: ["config:recommended", ":dependencyDashboard"]`; `enabledManagers: ["dockerfile", "github-actions", "pip_requirements", "custom.regex"]`; one custom regex manager on `images.json` matching `"spark": "(?<currentValue>\d+\.\d+\.\d+)"` with `datasourceTemplate: "docker"`, `depNameTemplate: "spark"`, `versioningTemplate: "docker"`; another matching each full Python version inside the `"python": [...]` arrays with `datasourceTemplate: "docker"`, `depNameTemplate: "python"` (both regexes anchored so they cannot match each other's values); `packageRules`: `{matchDepNames: ["spark", "python"], matchUpdateTypes: ["minor", "major"], enabled: false}` (patch-only per row), `{matchUpdateTypes: ["patch", "pin", "digest"], automerge: true}`, `{matchManagers: ["github-actions"], automerge: true}`, `{matchManagers: ["pip_requirements"], matchUpdateTypes: ["minor", "patch"], automerge: true}`; `platformAutomerge: true`; `schedule: ["before 6am on monday"]`; `prConcurrentLimit: 4`; `labels: ["dependencies"]`. The `dockerfile` manager also sees `ARG` defaults; leave `eclipse-temurin:${JAVA_VERSION}-jre-jammy` and the stock Spark `FROM` alone (they follow ARGs, Renovate reports them as unversioned or tracks the ARG defaults; disable with a packageRule on `matchDepNames: ["eclipse-temurin", "spark"]` for the dockerfile manager only, since Spark is handled by images.json).
+- `scripts/render_readme.py` (stdlib): renders the tag table from `images.json` between the markers `<!-- tags:start -->` and `<!-- tags:end -->` in `README.md` (one row per image: Spark, Scala, Java, Python, the pull tag `ghcr.io/sdaberdaku/spark:<spark>-python<minor>`); `--check` exits 1 when the README is stale. Unit test with a fake images.json in `tests/test_render_readme.py` (`unittest`).
+- CI job `readme` in `ci.yml` (`needs: plan`, `permissions: contents: write`): checkout with `ref: ${{ github.event.pull_request.head.ref }}` and `fetch-depth: 0`, run the renderer, and when `git diff --quiet README.md` fails: commit `docs(readme): regenerate tag table` as `github-actions[bot]` (`41898282+github-actions[bot]@users.noreply.github.com`), push to the PR branch (same-repo PRs only; skip with a notice for forks), then exit 1 so this run's `ci-ok` stays red; the push starts a fresh run that passes. `ci-ok` adds `readme` to its needs. On `workflow_dispatch` the job only checks.
+- README "Size" section (static, hand-measured, dated 2026-10-27): a table comparing the stock `spark:4.2.0-python3` (Python 3.10) with `ghcr.io/sdaberdaku/spark:4.2.0-python3.14`: compressed registry size per architecture (stock amd64 802 MB, arm64 794 MB from the Docker Hub tags API; ours from `docker manifest inspect -v` summing layer sizes, compute it: `docker manifest inspect ghcr.io/sdaberdaku/spark:4.2.0-python3.14 -v | python3 -c '...'` or `skopeo inspect` if available) and on-disk size after pull (`docker image inspect -f '{{.Size}}'` on amd64; stock image pulled locally too), plus a sentence on where the difference comes from (JRE instead of the full JDK, Debian slim base, no bytecode, no krb5/net-tools/wget/gnupg) and a note that ours also carries pandas and pyarrow (about 320 MB on disk) which the stock image lacks. Measured locally during this task; numbers in the README state the date and method.
+- README: the tag table lives between the markers and is never hand-edited (say so in a comment next to the markers); replace the weekly-rebuild wording with: images are rebuilt when a Renovate pull request bumps Spark, Python, pandas or pyarrow (patch-only per row; a new Spark or Python minor is a manual row); tag table gains the full-Python tag; the retention paragraph stays; remove the 60-day cron note; add the accepted gap (OS-level fixes without tag changes arrive with the next rebuild).
+
+- [ ] **Step 1: Make the changes on a branch `feat/renovate-pinned-inputs`; lint workflows; validate `renovate.json` with `npx --yes renovate-config-validator renovate.json` (node is available; if not, `docker run --rm -v "$PWD":/w -w /w renovate/renovate renovate-config-validator`)**
+
+- [ ] **Step 2: Build and smoke one row locally with the full Python version** (`docker build --build-arg SPARK_VERSION=4.2.0 --build-arg PYTHON_VERSION=<full 3.14> -t spark-local:x . && bash test/smoke.sh spark-local:x <full 3.14>`)
+
+- [ ] **Step 3: Commit, push, PR, `ci-ok`, squash-merge, watch the publish run (all rows, cleanup), verify `docker manifest inspect ghcr.io/sdaberdaku/spark:4.2.0-python3.14.<x>` and `...:4.2.0-python3.14`**
+
+- [ ] **Step 4: Report** the run URL, the new tag list for one row, and the Renovate config summary. The Mend Renovate app installation on the account is the owner's step; say so in the report and in the README's development section.
+
+---
+
+### Task 6: Discovery of new Spark minor and major lines
+
+**Files:**
+- Create: `.github/workflows/discover.yml`, `scripts/discover.py`
+- Modify: `README.md` (one paragraph under the rebuild section), `renovate.json` (nothing unless the new file needs an exclusion)
+
+**Interfaces:**
+- `scripts/discover.py` (stdlib only, Python 3.12 on the runner): reads `images.json`; two discoveries, both against Docker Hub (follow `next` pages):
+  - Spark: `https://hub.docker.com/v2/repositories/library/spark/tags?page_size=100&name=-ubuntu`, tags matching `^(\d+)\.(\d+)\.(\d+)-scala(\d+\.\d+)-java(\d+)-ubuntu$`; group by `major.minor`; ignore lines below 3.5 and lines already in `images.json`; for each new line pick the highest patch, Scala `2.13` when available (else the highest), Java `21` when available (else the highest), and the `python` list of the newest existing row; append rows in version order.
+  - Python: `https://hub.docker.com/v2/repositories/library/python/tags?page_size=100&name=-slim`, tags matching `^(\d+)\.(\d+)\.(\d+)-slim$`; group by `major.minor`; a Python line is new when it is higher than every Python line present in `images.json`; add its highest patch to every row whose Spark major equals the highest Spark major in the file (the smoke test on the PR decides; a failing row is trimmed by hand before merge).
+  Writes `images.json` back (2-space indent, trailing newline); prints the additions one per line as `spark 4.3` / `python 3.15`; exit 0 in every case. A `--dry-run` flag prints without writing. Unit-tested in-process with fake tag lists (a small `tests/test_discover.py` using `unittest`, run with `python -m unittest`).
+- `discover.yml`: `on: schedule: cron "0 5 * * *"` (one API call a day, no builds) and `workflow_dispatch`; `permissions: contents: write, pull-requests: write, actions: write`; steps: checkout, `actions/setup-python@v7` 3.12, run `python scripts/discover.py`, capture the output; if empty, stop; else `git switch -c discover/<yyyymmdd>`, commit `feat(images): add <additions>` (e.g. `add Spark 4.3, Python 3.15`) as the github-actions bot (`github-actions[bot]` name and `41898282+github-actions[bot]@users.noreply.github.com` email), push, `gh pr create` with a plain-prose body listing the new rows and that rows failing the smoke test must be trimmed by hand, `gh workflow run ci.yml --ref <branch>` (a PR opened with `GITHUB_TOKEN` does not trigger `pull_request` workflows; the dispatched run reports `ci-ok` on the branch head commit, which is what the protection checks), then `gh pr merge --auto --squash`. Idempotent: if a branch or open PR for that line already exists, do nothing.
+- Repo setting `allow auto-merge` is already enabled.
+- README paragraph: new Spark minor and major lines, and new Python lines, are discovered daily and arrive as a pull request that auto-merges when every row passes the smoke test; a row whose Python versions are not all supported needs a hand edit before merge. Branch name `discover/<yyyymmdd>`, commit `feat(images): add <additions>`.
+
+- [ ] **Step 1: Write `scripts/discover.py` with its unittest first (fake Spark tags: existing 4.2.0 row, Docker Hub offering 4.2.1, 4.3.0, 5.0.0 with java21/25 and scala2.13; expect rows 4.3.0 and 5.0.0 added with java 21 and python copied, 4.2.1 ignored because the 4.2 line exists. Fake Python tags: 3.14.11 and 3.15.0 offered; expect 3.15.0 added to every row of the highest Spark major only, 3.14.11 ignored because the 3.14 line exists); run `python -m unittest tests/test_discover.py`**
+
+- [ ] **Step 2: Run `python scripts/discover.py --dry-run` against the live Docker Hub; expected: no new lines today (4.2 is the newest)**
+
+- [ ] **Step 3: Write `discover.yml`, lint it, commit on the Task 5 branch (same PR) or a follow-up branch if Task 5 already merged; after merge, `gh workflow run discover.yml` once and confirm it exits cleanly with nothing to add**
+
+- [ ] **Step 4: Report** the run URL and the dry-run output.

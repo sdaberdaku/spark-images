@@ -23,7 +23,7 @@ out=$(docker run --rm -e HOME=/tmp/elsewhere -v "$here/job.py:/tmp/job.py:ro" "$
   || fail "job run exited non-zero"
 
 grep -qx '185' <<<"$out" || fail "uid is not 185"
-grep -q "^Python ${python_version//./\\.}\\." <<<"$out" || fail "python is not ${python_version}"
+grep -qx "Python ${python_version}" <<<"$out" || fail "python is not ${python_version}"
 grep -qx 'RESULT sum 499500' <<<"$out" || fail "missing RESULT sum 499500"
 grep -qx "RESULT arrow 6 python ${python_version}" <<<"$out" || fail "missing RESULT arrow 6 python ${python_version}"
 grep -qx 'RESULT udf 20' <<<"$out" || fail "missing RESULT udf 20"
