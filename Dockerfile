@@ -17,7 +17,8 @@ RUN set -eux; \
     groupadd --system --gid=${spark_uid} spark; \
     useradd --system --uid=${spark_uid} --gid=spark spark; \
     apt-get update; \
-    apt-get install -y --no-install-recommends bash tini libc6 libpam-modules libnss3 procps gosu libnss-wrapper libjemalloc2; \
+    apt-get install -y --no-install-recommends bash tini libc6 libpam-modules libnss3 procps gosu libnss-wrapper libjemalloc2 curl; \
+    echo "auth required pam_wheel.so use_uid" >> /etc/pam.d/su; \
     rm -rf /var/lib/apt/lists/*; \
     pip install --no-cache-dir --no-compile -r /tmp/requirements.txt; \
     rm /tmp/requirements.txt; \
