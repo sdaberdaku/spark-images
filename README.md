@@ -81,6 +81,8 @@ The `spark` user owns `/opt/spark`. If you use `ADD` with a URL, add `--chown=sp
 
 The images are rebuilt weekly so that base image and OS package updates are picked up. Each rebuild also gets a dated tag of the form `<spark>-python<python>-<YYYYMMDD>`. The undated tags always point to the latest build. Every row is smoke-tested before it is pushed, so a row that fails the test keeps its previous image.
 
+Floating tags (`<spark>-python<python>` and `<major.minor>-python<python>`) are never deleted. Dated tags are kept for 90 days. Untagged versions are removed once nothing references them. The Publish workflow runs the cleanup after each publish.
+
 GitHub disables scheduled workflows after 60 days without repository activity. A commit or a manual run of the Publish workflow enables the schedule again.
 
 ## Adding a row
