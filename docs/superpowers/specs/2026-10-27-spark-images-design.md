@@ -8,7 +8,7 @@
 The official `spark:<version>-python3` images carry the Python of their Ubuntu base (3.10 on jammy). PySpark
 requires the same Python minor on the driver and on every executor, so anyone running a driver on a newer Python
 (an Airflow worker on 3.12, a notebook on 3.14, a Spark Connect client) needs executor images with that exact
-Python. This project publishes them: the stock Spark image plus one uv-managed CPython, nothing else.
+Python. This project publishes them: the official python image plus a JRE and the stock Spark distribution, nothing else.
 
 ## Goals
 

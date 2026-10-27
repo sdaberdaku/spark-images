@@ -59,7 +59,7 @@ Expected: exit 0 for 3.11; for 3.12 either exit 0 (keep the row) or a clear fail
 - [ ] **Step 4: Commit**
 
 ```bash
-git add -A && git commit -m "feat: Spark image with uv-managed Python, matrix and smoke test"
+git add -A && git commit -m "feat: Spark image on the official python base, matrix and smoke test"
 ```
 
 ---
