@@ -1,0 +1,58 @@
+# Builds and smoke-tests every row of images.json (amd64) on pull requests.
+# Draft PRs skip the build, so `ci-ok` is red on a draft on purpose: mark the
+# PR ready for review to run the matrix. `ci-ok` is the single required check.
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: matrix
+        run: |
+          matrix=$(jq -c '[.[] | . as $r | .python[] | {spark: $r.spark, scala: $r.scala, java: $r.java, python: .}]' images.json)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: spark-ci:${{ matrix.spark }}-python${{ matrix.python }}
+          build-args: |
+            SPARK_VERSION=${{ matrix.spark }}
+            SCALA_VERSION=${{ matrix.scala }}
+            JAVA_VERSION=${{ matrix.java }}
+            PYTHON_VERSION=${{ matrix.python }}
+          cache-from: type=gha,scope=${{ matrix.spark }}-${{ matrix.python }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.spark }}-${{ matrix.python }}
+      - run: bash test/smoke.sh spark-ci:${{ matrix.spark }}-python${{ matrix.python }} ${{ matrix.python }}
+
+  ci-ok:
+    needs: [build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.build.result }}" = success

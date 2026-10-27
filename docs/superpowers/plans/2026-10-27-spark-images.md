@@ -42,7 +42,7 @@
 - `images.json`: `[{"spark": "3.5.9", "scala": "2.12", "java": "17", "python": ["3.11", "3.12"]}, {"spark": "4.0.4", "scala": "2.13", "java": "21", "python": ["3.11", "3.12", "3.13"]}, {"spark": "4.1.3", "scala": "2.13", "java": "21", "python": ["3.11", "3.12", "3.13", "3.14"]}, {"spark": "4.2.0", "scala": "2.13", "java": "21", "python": ["3.11", "3.12", "3.13", "3.14"]}]`.
 - `test/job.py`: prints `RESULT sum 499500` from `spark.range(1000).selectExpr("sum(id)")`, `RESULT arrow 6 python <major.minor>` from `spark.createDataFrame(pd.DataFrame({"x": [1, 2, 3]})).toPandas()` with `spark.sql.execution.arrow.pyspark.enabled=true`, `RESULT udf 20` from `spark.range(5).rdd.map(lambda r: r.id * 2).sum()`.
 - `test/smoke.sh IMAGE PYTHON_VERSION`: `docker run --rm -e HOME=/tmp/elsewhere -v "$PWD/test/job.py:/tmp/job.py:ro" IMAGE bash -c 'id -u && python -V && /opt/spark/bin/spark-submit --master local[2] --conf spark.ui.enabled=false --conf spark.sql.execution.arrow.pyspark.enabled=true /tmp/job.py'`; asserts uid `185`, `Python PYTHON_VERSION.` prefix, the three `RESULT` lines, that `python -c "import pandas, pyarrow"` succeeds, and that `docker run --rm IMAGE driver` (the stock entrypoint) prints `Missing application resource` (proves the entrypoint runs). Prints the image size (`docker image inspect -f '{{.Size}}'`). Exit 1 with the captured output on any miss.
-- README: what the images are, the tag table, pull command, Spark on Kubernetes usage (`spark.kubernetes.container.image`), what differs from the stock image (Debian slim base from the official python image, JRE instead of JDK, Python in `/usr/local`, no krb5-user/net-tools/wget/gnupg2, measured sizes), how to extend with jars (`FROM ghcr.io/sdaberdaku/spark:4.2.0-python3.14` + `ADD` into `/opt/spark/jars/`), the weekly rebuild and dated tags, how to add a row.
+- README: what the images are, the tag table, pull command, usage as a drop-in for the stock image (local `docker run` with `spark-submit`, Spark on Kubernetes via `spark.kubernetes.container.image`, Spark Connect server, standalone cluster), what differs from the stock image (Debian slim base from the official python image, JRE instead of JDK, Python in `/usr/local`, no krb5-user/net-tools/wget/gnupg2, measured sizes), how to extend with jars (`FROM ghcr.io/sdaberdaku/spark:4.2.0-python3.14` + `ADD` into `/opt/spark/jars/`), the weekly rebuild and dated tags, how to add a row.
 
 - [ ] **Step 1: Write the files**
 
@@ -90,18 +90,40 @@ git push -u origin HEAD && gh pr create --fill --draft && gh pr ready
 
 **Files:**
 - Create: `.github/workflows/publish.yml`
-- Modify: `README.md` (badge, note on the weekly rebuild)
+- Modify: `README.md` (badge; note that the weekly rebuild smoke-tests every row before pushing, that GitHub disables cron workflows after 60 days without repository activity so a commit or a manual run re-enables it, and the tag list including `<major.minor>-python<python>` next to the other two; also the deferred Task 1 minors: rephrase "Debian slim, not Ubuntu" / "a JRE, not a JDK" as "instead of", say in the Kubernetes example that the job file is baked into the image)
 
 **Interfaces:**
 - Triggers: `push: branches: [main]`, `schedule: cron "0 4 * * 1"`, `workflow_dispatch`. `permissions: contents: read, packages: write`. `concurrency: publish`.
-- Job `plan` as in CI (no draft condition). Job `publish`: matrix as in CI, `timeout-minutes: 60`: checkout, `docker/setup-qemu-action@v3`, `docker/setup-buildx-action@v3`, `docker/login-action@v3` (`registry: ghcr.io`, `username: ${{ github.actor }}`, `password: ${{ secrets.GITHUB_TOKEN }}`), a step that sets `DATE=$(date -u +%Y%m%d)`, `docker/build-push-action@v6` with `push: true`, `platforms: linux/amd64,linux/arm64`, tags `ghcr.io/sdaberdaku/spark:${spark}-python${python}`, `ghcr.io/sdaberdaku/spark:${spark%.*}-python${python}` (minor-level) and `ghcr.io/sdaberdaku/spark:${spark}-python${python}-${DATE}`, same gha cache scopes as CI, `provenance: false` (keeps the manifest a plain multi-arch index).
-- Branch protection via `gh api -X PUT repos/sdaberdaku/spark-images/branches/main/protection`: `required_status_checks: {strict: true, contexts: ["ci-ok"]}`, `enforce_admins: true`, `required_pull_request_reviews: null`, `restrictions: null`, `required_linear_history: true`, `allow_force_pushes: true`, `allow_deletions: false`. `gh repo edit --enable-merge-commit=false --delete-branch-on-merge`.
+- Job `plan` as in CI (no draft condition). Job `publish`: matrix as in CI, `fail-fast: false`, `timeout-minutes: 60`: checkout, `docker/setup-qemu-action@v3`, `docker/setup-buildx-action@v3`, `docker/login-action@v3` (`registry: ghcr.io`, `username: ${{ github.actor }}`, `password: ${{ secrets.GITHUB_TOKEN }}`), a step that sets `DATE=$(date -u +%Y%m%d)`; then, per row, the smoke gate before any push: `docker/build-push-action@v6` with `load: true`, `push: false`, `platforms: linux/amd64`, tag `spark-smoke:${spark}-python${python}`, gha cache scopes as in CI; `bash test/smoke.sh spark-smoke:${spark}-python${python} ${python}`; only then `docker/build-push-action@v6` with `push: true`, `platforms: linux/amd64,linux/arm64` (amd64 layers come from the cache just filled), tags `ghcr.io/sdaberdaku/spark:${spark}-python${python}`, `ghcr.io/sdaberdaku/spark:${spark%.*}-python${python}` (minor-level) and `ghcr.io/sdaberdaku/spark:${spark}-python${python}-${DATE}`, same cache scopes, `provenance: false` (keeps the manifest a plain multi-arch index). A row whose smoke test fails pushes nothing; other rows are unaffected.
+- Branch protection via `gh api -X PUT repos/sdaberdaku/spark-images/branches/main/protection`: `required_status_checks: {strict: true, contexts: ["ci-ok"]}`, `enforce_admins: true`, `required_pull_request_reviews: null`, `restrictions: null`, `required_linear_history: true`, `allow_force_pushes: true`, `allow_deletions: false`. Repo merge settings are already set (squash only, delete branch on merge); merge with `gh pr merge --squash`.
 
 - [ ] **Step 1: Write the workflow, lint it, commit, push, wait for `ci-ok`**
 
-- [ ] **Step 2: Apply protection, merge with `gh pr merge --rebase`, watch the first publish run**
+- [ ] **Step 2: Apply protection, merge with `gh pr merge --squash`, watch the first publish run**
 
 Run: `gh run watch` on the `Publish` run.
 Expected: 13 rows pushed; `docker manifest inspect ghcr.io/sdaberdaku/spark:4.2.0-python3.14` lists amd64 and arm64 (may need the package to be public first; report either way).
 
 - [ ] **Step 3: Report** the run URL, the tag list, and whether the package `spark` is public or still needs the visibility switch in the package settings.
+
+---
+
+### Task 4: Cleanup of old image versions
+
+**Files:**
+- Modify: `.github/workflows/publish.yml`, `README.md` (retention policy sentence)
+
+**Interfaces:**
+- Job `cleanup` in `publish.yml`: `needs: publish`, `if: always()` (runs even when a row failed), `permissions: packages: write`, single step `dataaxiom/ghcr-cleanup-action@v1` with `token: ${{ secrets.GITHUB_TOKEN }}`, `owner: sdaberdaku`, `package: spark`, `older-than: 90 days`, `delete-tags: "*-20[0-9][0-9][0-1][0-9][0-3][0-9]"` (dated tags only), `exclude-tags` left empty (the pattern already excludes floating tags), `delete-untagged: true` (the action keeps untagged child manifests that a tagged multi-arch index still references), `dry-run: false`. Check the action's README for the exact input names before writing them; if an input differs, use the documented one and say so in the report.
+- Policy stated in the README under a "Retention" heading: floating tags `<spark>-python<python>` and `<major.minor>-python<python>` are never deleted; dated tags are kept for 90 days; untagged versions are removed when nothing references them.
+
+- [ ] **Step 1: Add the job and the README sentence; lint the workflow**
+
+Run: `uvx --from actionlint-py actionlint .github/workflows/publish.yml`
+Expected: no findings
+
+- [ ] **Step 2: Commit, push, wait for `ci-ok`, merge with `gh pr merge --squash`, watch the publish run including `cleanup`**
+
+Expected: `cleanup` completes without deleting anything on the first run (nothing older than 90 days); its log lists the versions it considered.
+
+- [ ] **Step 3: Report** the run URL and what the cleanup log shows.
