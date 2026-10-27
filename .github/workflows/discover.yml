@@ -49,6 +49,8 @@ jobs:
       - name: Discover new lines
         id: found
         if: steps.open.outputs.skip != 'true'
+        env:
+          DISCOVER_FAKE_SPARK_TAGS: 4.3.0-scala2.13-java21-ubuntu,4.3.0-scala2.13-java25-ubuntu
         run: |
           set -euo pipefail
           python scripts/discover.py > additions.txt
