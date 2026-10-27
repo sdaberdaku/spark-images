@@ -80,7 +80,9 @@ docker run -d --network host ghcr.io/sdaberdaku/spark:4.2-python3.14 \
 - The base is Debian slim from the official `python` image instead of Ubuntu.
 - It contains a JRE instead of a JDK.
 - Python lives in `/usr/local`, and `PYSPARK_PYTHON` points to it.
-- `krb5-user`, `net-tools`, `wget` and `gnupg2` are not installed.
+- `curl` is kept so that derived images can download jars.
+- `wget` and `gnupg2` (the stock build uses them to download and verify the Spark tarball), `net-tools` (debugging only) and `krb5-user` (`kinit` and `klist`; Spark logs in to Kerberos through the JVM with `spark.kerberos.keytab` and `spark.kerberos.principal`) are not installed. A derived image can install them.
+- `su` is restricted to the `wheel` group with `pam_wheel`, as in the stock image.
 
 ## Size
 
@@ -97,10 +99,14 @@ The difference comes from the JRE instead of the full JDK, the Debian slim base,
 
 ```dockerfile
 FROM ghcr.io/sdaberdaku/spark:4.2-python3.14
-ADD https://repo1.maven.org/maven2/org/example/lib/1.0/lib-1.0.jar /opt/spark/jars/
+USER root
+RUN curl -fsSL -o /opt/spark/jars/postgresql-42.7.4.jar \
+      https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.4/postgresql-42.7.4.jar \
+ && chown spark:spark /opt/spark/jars/postgresql-42.7.4.jar
+USER spark
 ```
 
-The `spark` user owns `/opt/spark`. If you use `ADD` with a URL, add `--chown=spark:spark` or switch to `USER root` for the step.
+The `spark` user owns `/opt/spark`, so the download runs as root and the file is handed back to `spark`. `ADD --chown=spark:spark <url> /opt/spark/jars/` also works.
 
 ## Rebuilds
 
