@@ -91,7 +91,7 @@ Measured on 2026-10-27 against the stock `spark:4.2.0-python3` image (Python 3.1
 | Image | Compressed amd64 | Compressed arm64 | On disk (amd64) |
 | ----- | ---------------- | ---------------- | --------------- |
 | `spark:4.2.0-python3` | 802 MB | 794 MB | 2.17 GB |
-| `ghcr.io/sdaberdaku/spark:4.2.0-python3.14` | 643 MB | 638 MB | 1.76 GB |
+| `ghcr.io/sdaberdaku/spark:4.2.0-python3.14` | 647 MB | 643 MB | 1.77 GB |
 
 The difference comes from the JRE instead of the full JDK, the Debian slim base, Python packages installed without bytecode, and the missing `krb5-user`, `net-tools`, `wget` and `gnupg2`. Our image also carries pandas and pyarrow (about 320 MB on disk), which the stock image does not have.
 
@@ -99,14 +99,11 @@ The difference comes from the JRE instead of the full JDK, the Debian slim base,
 
 ```dockerfile
 FROM ghcr.io/sdaberdaku/spark:4.2-python3.14
-USER root
 RUN curl -fsSL -o /opt/spark/jars/postgresql-42.7.4.jar \
-      https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.4/postgresql-42.7.4.jar \
- && chown spark:spark /opt/spark/jars/postgresql-42.7.4.jar
-USER spark
+      https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.4/postgresql-42.7.4.jar
 ```
 
-The `spark` user owns `/opt/spark`, so the download runs as root and the file is handed back to `spark`. `ADD --chown=spark:spark <url> /opt/spark/jars/` also works.
+The image runs as the `spark` user, which owns `/opt/spark/jars`, so the download needs no `USER root`. `ADD --chown=spark:spark <url> /opt/spark/jars/` also works.
 
 ## Rebuilds
 
