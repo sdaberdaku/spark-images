@@ -99,14 +99,11 @@ The difference comes from the JRE instead of the full JDK, the Debian slim base,
 
 ```dockerfile
 FROM ghcr.io/sdaberdaku/spark:4.2-python3.14
-USER root
 RUN curl -fsSL -o /opt/spark/jars/postgresql-42.7.4.jar \
-      https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.4/postgresql-42.7.4.jar \
- && chown spark:spark /opt/spark/jars/postgresql-42.7.4.jar
-USER spark
+      https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.4/postgresql-42.7.4.jar
 ```
 
-The `spark` user owns `/opt/spark`, so the download runs as root and the file is handed back to `spark`. `ADD --chown=spark:spark <url> /opt/spark/jars/` also works.
+The image runs as the `spark` user, which owns `/opt/spark/jars`, so the download needs no `USER root`. `ADD --chown=spark:spark <url> /opt/spark/jars/` also works.
 
 ## Rebuilds
 
