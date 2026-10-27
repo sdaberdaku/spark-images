@@ -1,12 +1,14 @@
 # spark-images
 
+[![publish](https://github.com/sdaberdaku/spark-images/actions/workflows/publish.yml/badge.svg)](https://github.com/sdaberdaku/spark-images/actions/workflows/publish.yml)
+
 Apache Spark images with Python, pandas and pyarrow, published to `ghcr.io/sdaberdaku/spark`. They are meant as a drop-in replacement for the stock `spark` image wherever it runs: locally with Docker, on Kubernetes, as a Spark Connect server or in a standalone cluster. The stock entrypoint and decommission script are kept, so anything that works with the stock image works here.
 
 The final stage is the official `python:<python>-slim-bookworm` image. A JRE is copied from `eclipse-temurin:<java>-jre-jammy`, and `/opt/spark`, `/opt/entrypoint.sh` and `/opt/decom.sh` are copied from the stock `spark:<spark>-scala<scala>-java<java>-ubuntu` image. pandas and pyarrow are installed with pip. Spark runs as user `spark` (uid 185).
 
 ## Tags
 
-Tags have the form `<spark>-python<python>`.
+Each image has three tags: `<spark>-python<python>` (for example `4.2.0-python3.14`), `<major.minor>-python<python>` (`4.2-python3.14`, which follows the latest patch release) and the dated tag described under Rebuilds.
 
 | Spark | Scala | Java | Python |
 | ----- | ----- | ---- | ------ |
@@ -30,7 +32,7 @@ docker run --rm -v "$PWD/job.py:/tmp/job.py:ro" ghcr.io/sdaberdaku/spark:4.2.0-p
   /opt/spark/bin/spark-submit --master 'local[2]' /tmp/job.py
 ```
 
-Spark on Kubernetes, with the image used for both driver and executors:
+Spark on Kubernetes, with the image used for both driver and executors. The job file is baked into the image, so build an image `FROM` this one that copies `job.py` to `/opt/spark/work-dir/`:
 
 ```bash
 spark-submit \
@@ -60,8 +62,8 @@ docker run -d --network host ghcr.io/sdaberdaku/spark:4.2.0-python3.14 \
 
 ## Differences from the stock image
 
-- The base is Debian slim from the official `python` image, not Ubuntu.
-- It contains a JRE, not a JDK.
+- The base is Debian slim from the official `python` image instead of Ubuntu.
+- It contains a JRE instead of a JDK.
 - Python lives in `/usr/local`, and `PYSPARK_PYTHON` points to it.
 - `krb5-user`, `net-tools`, `wget` and `gnupg2` are not installed.
 - Measured sizes on disk: 1.76 GB for 4.2.0 with Python 3.14, 1.47 GB for 3.5.9 with Python 3.11.
@@ -77,7 +79,9 @@ The `spark` user owns `/opt/spark`. If you use `ADD` with a URL, add `--chown=sp
 
 ## Rebuilds and dated tags
 
-The images are rebuilt weekly so that base image and OS package updates are picked up. Each rebuild also gets a dated tag of the form `<spark>-python<python>-<YYYYMMDD>`. The undated tag always points to the latest build.
+The images are rebuilt weekly so that base image and OS package updates are picked up. Each rebuild also gets a dated tag of the form `<spark>-python<python>-<YYYYMMDD>`. The undated tags always point to the latest build. Every row is smoke-tested before it is pushed, so a row that fails the test keeps its previous image.
+
+GitHub disables scheduled workflows after 60 days without repository activity. A commit or a manual run of the Publish workflow enables the schedule again.
 
 ## Adding a row
 

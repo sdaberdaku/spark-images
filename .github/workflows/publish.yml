@@ -1,0 +1,81 @@
+# Builds every row of images.json, smoke-tests it on amd64, then pushes a
+# multi-arch image. Runs on pushes to main and weekly to pick up base image updates.
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency: publish
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: matrix
+        run: |
+          matrix=$(jq -c '[.[] | . as $r | .python[] | {spark: $r.spark, minor: ($r.spark | split(".")[:2] | join(".")), scala: $r.scala, java: $r.java, python: .}]' images.json)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: echo "DATE=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
+      - name: Build for the smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          platforms: linux/amd64
+          tags: spark-smoke:${{ matrix.spark }}-python${{ matrix.python }}
+          build-args: |
+            SPARK_VERSION=${{ matrix.spark }}
+            SCALA_VERSION=${{ matrix.scala }}
+            JAVA_VERSION=${{ matrix.java }}
+            PYTHON_VERSION=${{ matrix.python }}
+          cache-from: type=gha,scope=${{ matrix.spark }}-${{ matrix.python }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.spark }}-${{ matrix.python }}
+      - run: bash test/smoke.sh spark-smoke:${{ matrix.spark }}-python${{ matrix.python }} ${{ matrix.python }}
+      - name: Push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          provenance: false
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/sdaberdaku/spark:${{ matrix.spark }}-python${{ matrix.python }}
+            ghcr.io/sdaberdaku/spark:${{ matrix.minor }}-python${{ matrix.python }}
+            ghcr.io/sdaberdaku/spark:${{ matrix.spark }}-python${{ matrix.python }}-${{ env.DATE }}
+          build-args: |
+            SPARK_VERSION=${{ matrix.spark }}
+            SCALA_VERSION=${{ matrix.scala }}
+            JAVA_VERSION=${{ matrix.java }}
+            PYTHON_VERSION=${{ matrix.python }}
+          cache-from: type=gha,scope=${{ matrix.spark }}-${{ matrix.python }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.spark }}-${{ matrix.python }}
