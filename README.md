@@ -8,7 +8,7 @@ The final stage is the official `python:<python>-slim` image. A JRE is copied fr
 
 ## Tags
 
-Each image has four tags: `<spark>-python<minor>` (for example `4.2.0-python3.14`, which follows the latest build of that Python line), `<spark>-python<full>` (`4.2.0-python3.14.10`, a pinned Python patch version), `<major.minor>-python<minor>` (`4.2-python3.14`, which follows the latest Spark patch release) and the dated tag described under Rebuilds.
+Each image has three tags: `<spark>-python<minor>` (for example `4.2.0-python3.14`, which follows the latest build of that Python line), `<spark>-python<full>` (`4.2.0-python3.14.10`, a pinned Python patch version) and `<major.minor>-python<minor>` (`4.2-python3.14`, which follows the latest Spark patch release).
 
 The table below is generated from `images.json` by `scripts/render_readme.py` and is overwritten by CI; do not edit it by hand.
 
@@ -94,13 +94,13 @@ ADD https://repo1.maven.org/maven2/org/example/lib/1.0/lib-1.0.jar /opt/spark/ja
 
 The `spark` user owns `/opt/spark`. If you use `ADD` with a URL, add `--chown=spark:spark` or switch to `USER root` for the step.
 
-## Rebuilds and dated tags
+## Rebuilds
 
-Everything that goes into an image is pinned: the Spark version and the Python patch version in `images.json`, and pandas and pyarrow in `requirements.txt`. Images are rebuilt when a Renovate pull request bumps one of them. Renovate proposes patch updates per row; a new Spark or Python minor is added by hand as a new row. Each rebuild also gets a dated tag of the form `<spark>-python<minor>-<YYYYMMDD>`. The undated tags always point to the latest build. Every row is smoke-tested before it is pushed, so a row that fails the test keeps its previous image.
+Everything that goes into an image is pinned: the Spark version and the Python patch version in `images.json`, and pandas and pyarrow in `requirements.txt`. Images are rebuilt when a Renovate pull request bumps one of them. Renovate proposes patch updates per row; a new Spark or Python minor is added by hand as a new row. Tags always point to the latest build. Every row is smoke-tested before it is pushed, so a row that fails the test keeps its previous image.
 
 OS-level fixes that do not change a tag (a new Debian package build, for example) are not picked up until the next rebuild. That gap is accepted.
 
-Floating tags (`<spark>-python<minor>`, `<spark>-python<full>` and `<major.minor>-python<minor>`) are never deleted. Dated tags are kept for 90 days. Untagged versions are removed once nothing references them. The Publish workflow runs the cleanup after each publish, and can run it alone from the Actions tab (inputs `only_cleanup`, `cleanup_dry_run` and `cleanup_older_than`).
+Tags are never deleted. A rebuild moves the tag to the new image, and the old image stays only until the next cleanup removes unreferenced untagged versions. The Publish workflow runs the cleanup after each publish, and can run it alone from the Actions tab (inputs `only_cleanup` and `cleanup_dry_run`). For a reproducible pin use the image digest (`ghcr.io/sdaberdaku/spark@sha256:...`), which Renovate can also keep updated.
 
 ## Development
 
