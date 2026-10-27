@@ -30,6 +30,11 @@ The table below is generated from `images.json` by `scripts/render_readme.py`; d
 | `ghcr.io/sdaberdaku/spark:4.2-python3.13` | 2.13 | 21 |
 | `ghcr.io/sdaberdaku/spark:4.2-python3.14` | 2.13 | 21 |
 | `ghcr.io/sdaberdaku/spark:4.2-python3.15` | 2.13 | 21 |
+| `ghcr.io/sdaberdaku/spark:4.3-python3.11` | 2.13 | 21 |
+| `ghcr.io/sdaberdaku/spark:4.3-python3.12` | 2.13 | 21 |
+| `ghcr.io/sdaberdaku/spark:4.3-python3.13` | 2.13 | 21 |
+| `ghcr.io/sdaberdaku/spark:4.3-python3.14` | 2.13 | 21 |
+| `ghcr.io/sdaberdaku/spark:4.3-python3.15` | 2.13 | 21 |
 <!-- tags:end -->
 
 Spark 3.5.9 with Python 3.12 is not published. PySpark 3.5 imports `distutils`, which Python 3.12 removed, so `createDataFrame` from pandas fails (checked with `test/smoke.sh`). Python versions beyond what PySpark declares in its classifiers are published only when the smoke test passes.
