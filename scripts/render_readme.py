@@ -13,13 +13,13 @@ def minor(version):
 
 def table(rows):
     lines = [
-        "| Spark | Scala | Java | Python | Pull tag |",
-        "| ----- | ----- | ---- | ------ | -------- |",
+        "| Tag | Scala | Java |",
+        "| --- | ----- | ---- |",
     ]
     for r in rows:
-        pythons = ", ".join(r["python"])
-        tags = ", ".join(f"`{r['spark']}-python{minor(p)}`" for p in r["python"])
-        lines.append(f"| {r['spark']} | {r['scala']} | {r['java']} | {pythons} | {tags} |")
+        for p in r["python"]:
+            tag = f"ghcr.io/sdaberdaku/spark:{minor(r['spark'])}-python{minor(p)}"
+            lines.append(f"| `{tag}` | {r['scala']} | {r['java']} |")
     return "\n".join(lines)
 
 
