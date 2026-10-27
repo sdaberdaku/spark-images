@@ -10,11 +10,15 @@ fail() {
   echo "FAIL: $1" >&2
   echo "--- output ---" >&2
   echo "$out" >&2
+  echo "--- stderr ---" >&2
+  cat "$err" >&2
   exit 1
 }
 
+err=$(mktemp)
+# stderr (Spark logs) goes to a file: interleaved with stdout it can glue onto a RESULT line
 out=$(docker run --rm -e HOME=/tmp/elsewhere -v "$here/job.py:/tmp/job.py:ro" "$image" bash -c \
-  'id -u && python -V && /opt/spark/bin/spark-submit --master local[2] --conf spark.ui.enabled=false --conf spark.sql.execution.arrow.pyspark.enabled=true /tmp/job.py' 2>&1) \
+  'id -u && python -V && /opt/spark/bin/spark-submit --master local[2] --conf spark.ui.enabled=false --conf spark.sql.execution.arrow.pyspark.enabled=true /tmp/job.py' 2>"$err") \
   || fail "job run exited non-zero"
 
 echo "$out" | grep -qx '185' || fail "uid is not 185"
