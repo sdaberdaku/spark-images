@@ -104,7 +104,9 @@ The `spark` user owns `/opt/spark`. If you use `ADD` with a URL, add `--chown=sp
 
 ## Rebuilds
 
-Everything that goes into an image is pinned: the Spark version and the Python patch version in `images.json`, and pandas and pyarrow in `requirements.txt`. Images are rebuilt when a Renovate pull request bumps one of them. Renovate proposes patch updates per row; a new Spark or Python minor is added by hand as a new row. Tags always point to the latest build. Every row is smoke-tested before it is pushed, so a row that fails the test keeps its previous image.
+Everything that goes into an image is pinned: the Spark version and the Python patch version in `images.json`, and pandas and pyarrow in `requirements.txt`. Images are rebuilt when a Renovate pull request bumps one of them. Renovate proposes patch updates per row. Tags always point to the latest build. Every row is smoke-tested before it is pushed, so a row that fails the test keeps its previous image.
+
+New Spark minor and major lines, and new Python lines, are discovered daily by the Discover workflow, which compares Docker Hub with `images.json` and opens a pull request on a `discover/<yyyymmdd>` branch with the commit `feat(images): add <additions>`. The pull request renders the README table and merges itself once every row passes the smoke test. A row whose Python versions are not all supported by that Spark line needs a hand edit before the merge.
 
 OS-level fixes that do not change a tag (a new Debian package build, for example) are not picked up until the next rebuild. That gap is accepted.
 
