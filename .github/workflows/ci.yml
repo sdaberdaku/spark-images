@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v7
       - id: matrix
         run: |
-          matrix=$(jq -c '[.[] | . as $r | .python[] | {spark: $r.spark, scala: $r.scala, java: $r.java, python: ., python_minor: (. | split(".") | .[:2] | join("."))}]' images.json)
+          matrix=$(jq -c '[.[] | . as $r | .python[] | {spark: $r.spark, scala: $r.scala, java: $r.java, python: .}]' images.json)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   build:
@@ -53,37 +53,13 @@ jobs:
   readme:
     needs: plan
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
-      - name: Check the tag table
-        if: github.event_name != 'pull_request'
-        run: python scripts/render_readme.py --check
-      - name: Regenerate the tag table
-        if: github.event_name == 'pull_request'
-        run: |
-          python -m unittest tests/test_render_readme.py
-          python scripts/render_readme.py
-          if git diff --quiet README.md; then
-            exit 0
-          fi
-          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "::error::README.md tag table is stale; run scripts/render_readme.py (fork PRs are not pushed to)"
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "docs(readme): regenerate tag table" README.md
-          git push
-          echo "::error::README.md tag table was stale; pushed a fix, a new run follows"
-          exit 1
+      - run: python -m unittest tests/test_render_readme.py
+      - run: python scripts/render_readme.py --check
 
   ci-ok:
     needs: [build, readme]
