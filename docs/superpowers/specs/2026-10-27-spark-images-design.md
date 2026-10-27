@@ -20,13 +20,16 @@ Python. This project publishes them: the official python image plus a JRE and th
    - 4.0.4 (Scala 2.13, Java 21): Python 3.11, 3.12, 3.13
    - 4.1.3 (Scala 2.13, Java 21): Python 3.11, 3.12, 3.13, 3.14
    - 4.2.0 (Scala 2.13, Java 21): Python 3.11, 3.12, 3.13, 3.14
-   amd64 and arm64. Each build also pushes a minor-level tag `<major.minor>-python<python>` and a dated tag
-   `<spark>-python<python>-<YYYYMMDD>` for pinning. Patch bumps are a one-line change in `images.json`.
+   amd64 and arm64. Python versions in `images.json` are full patch versions (`3.14.10`); the published tags use
+   the minor (`4.2.0-python3.14`) and the full version (`4.2.0-python3.14.10`). Each build also pushes a
+   minor-level tag `<major.minor>-python<python>` and a dated tag `<spark>-python<python>-<YYYYMMDD>` for pinning.
+   Spark, Python, pandas and pyarrow versions are bumped by Renovate (Mend app) pull requests, patch-only per row,
+   each one smoke-tested by CI before merge; patch-level and action updates automerge once `ci-ok` is green.
 2. Contents, built in stages so the final image is lean: final stage is the official `python:<python>-slim-bookworm`
    image (Python maintained by Docker's official images, every version, amd64 and arm64, pip included); the JRE is
    copied from `eclipse-temurin:<java>-jre-jammy` (a JRE, the stock Spark image ships a full JDK); `/opt/spark`,
    `/opt/entrypoint.sh` and `/opt/decom.sh` are copied from the stock `spark:<spark>-scala<scala>-java<java>-ubuntu`
-   image; `pandas` and `pyarrow` installed with pip, no compiled bytecode (Arrow and pandas UDFs work out of the
+   image; `pandas` and `pyarrow` installed with pip from a pinned `requirements.txt`, no compiled bytecode (Arrow and pandas UDFs work out of the
    box); the stock image's apt packages minus krb5-user, net-tools, wget and gnupg2; the same `spark` user (uid
    185), `WORKDIR /opt/spark/work-dir`, `ENTRYPOINT /opt/entrypoint.sh`; `PYSPARK_PYTHON` and
    `PYSPARK_DRIVER_PYTHON` set to `/usr/local/bin/python`. No third-party Python builds or package managers. A
@@ -35,9 +38,11 @@ Python. This project publishes them: the official python image plus a JRE and th
    1.76 GB on disk and 641 MB compressed, against 2.4 GB / 851 MB for a single-stage build on the stock image.
 3. A smoke test that runs a PySpark job in the built image (DataFrame aggregate, Arrow `toPandas`, an RDD `map`
    through a Python worker) on every pull request, for every row, on amd64.
-4. Published on merge to `main`, weekly (picks up Python patch releases and base image updates) and on demand; every
-   publish run smoke-tests each row on amd64 before pushing it. Dated tags older than 90 days and unreferenced
-   untagged versions are deleted after each publish run; the floating tags are never deleted.
+4. Published on merge to `main` and on demand (no cron: every input is pinned and Renovate opens the update PRs);
+   every publish run smoke-tests each row on amd64 before pushing it. Dated tags older than 90 days and unreferenced
+   untagged versions are deleted after each publish run; the floating tags are never deleted. Accepted gap: Debian
+   security fixes that land in `python:slim` or `eclipse-temurin` without a tag change reach the images only with
+   the next Renovate-driven rebuild.
 
 ## Non-goals
 

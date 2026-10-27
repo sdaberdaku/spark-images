@@ -127,3 +127,27 @@ Expected: no findings
 Expected: `cleanup` completes without deleting anything on the first run (nothing older than 90 days); its log lists the versions it considered.
 
 - [ ] **Step 3: Report** the run URL and what the cleanup log shows.
+
+---
+
+### Task 5: Renovate, pinned inputs, no cron
+
+**Files:**
+- Create: `renovate.json`, `requirements.txt`
+- Modify: `images.json`, `Dockerfile`, `.github/workflows/publish.yml`, `.github/workflows/ci.yml` (if it reads python from images.json, nothing changes; verify), `README.md`
+
+**Interfaces:**
+- `images.json`: Python entries become full versions, the current patch of each line as published on Docker Hub for `python:<ver>-slim-bookworm` (look them up with `curl -s "https://hub.docker.com/v2/repositories/library/python/tags?page_size=100&name=-slim-bookworm"`): e.g. `"python": ["3.11.x", "3.12.x", "3.13.x", "3.14.x"]`.
+- `Dockerfile`: `FROM python:${PYTHON_VERSION}-slim-bookworm` unchanged in shape (now a full version); pandas and pyarrow installed with `pip install --no-cache-dir --no-compile -r /tmp/requirements.txt` from `COPY requirements.txt /tmp/requirements.txt`; `requirements.txt` pins `pandas==<current>` and `pyarrow==<current>` (current PyPI versions).
+- `plan` jobs (ci.yml and publish.yml): the jq expansion adds `python_minor` (`.python | split(".")[:2] | join(".")`) next to `python`; the smoke test receives `python_minor`... no: `test/smoke.sh IMAGE PYTHON_VERSION` asserts the `Python X.Y.` prefix, so pass the full version and change the assertion to the exact `Python <full>` string (update smoke.sh accordingly).
+- publish.yml tags per row: `ghcr.io/sdaberdaku/spark:${spark}-python${python_minor}`, `ghcr.io/sdaberdaku/spark:${spark}-python${python}` (full), `ghcr.io/sdaberdaku/spark:${minor}-python${python_minor}`, `ghcr.io/sdaberdaku/spark:${spark}-python${python_minor}-${DATE}`. Remove the `schedule:` trigger; keep `push: branches: [main]` and `workflow_dispatch`. The cleanup job's dated-tag pattern must still match the dated tag form.
+- `renovate.json` (schema `https://docs.renovatebot.com/renovate-schema.json`): `extends: ["config:recommended", ":dependencyDashboard"]`; `enabledManagers: ["dockerfile", "github-actions", "pip_requirements", "custom.regex"]`; one custom regex manager on `images.json` matching `"spark": "(?<currentValue>\d+\.\d+\.\d+)"` with `datasourceTemplate: "docker"`, `depNameTemplate: "spark"`, `versioningTemplate: "docker"`; another matching each full Python version inside the `"python": [...]` arrays with `datasourceTemplate: "docker"`, `depNameTemplate: "python"` (both regexes anchored so they cannot match each other's values); `packageRules`: `{matchDepNames: ["spark", "python"], matchUpdateTypes: ["minor", "major"], enabled: false}` (patch-only per row), `{matchUpdateTypes: ["patch", "pin", "digest"], automerge: true}`, `{matchManagers: ["github-actions"], automerge: true}`, `{matchManagers: ["pip_requirements"], matchUpdateTypes: ["minor", "patch"], automerge: true}`; `platformAutomerge: true`; `schedule: ["before 6am on monday"]`; `prConcurrentLimit: 4`; `labels: ["dependencies"]`. The `dockerfile` manager also sees `ARG` defaults; leave `eclipse-temurin:${JAVA_VERSION}-jre-jammy` and the stock Spark `FROM` alone (they follow ARGs, Renovate reports them as unversioned or tracks the ARG defaults; disable with a packageRule on `matchDepNames: ["eclipse-temurin", "spark"]` for the dockerfile manager only, since Spark is handled by images.json).
+- README: replace the weekly-rebuild wording with: images are rebuilt when a Renovate pull request bumps Spark, Python, pandas or pyarrow (patch-only per row; a new Spark or Python minor is a manual row); tag table gains the full-Python tag; the retention paragraph stays; remove the 60-day cron note; add the accepted gap (OS-level fixes without tag changes arrive with the next rebuild).
+
+- [ ] **Step 1: Make the changes on a branch `feat/renovate-pinned-inputs`; lint workflows; validate `renovate.json` with `npx --yes renovate-config-validator renovate.json` (node is available; if not, `docker run --rm -v "$PWD":/w -w /w renovate/renovate renovate-config-validator`)**
+
+- [ ] **Step 2: Build and smoke one row locally with the full Python version** (`docker build --build-arg SPARK_VERSION=4.2.0 --build-arg PYTHON_VERSION=<full 3.14> -t spark-local:x . && bash test/smoke.sh spark-local:x <full 3.14>`)
+
+- [ ] **Step 3: Commit, push, PR, `ci-ok`, squash-merge, watch the publish run (all rows, cleanup), verify `docker manifest inspect ghcr.io/sdaberdaku/spark:4.2.0-python3.14.<x>` and `...:4.2.0-python3.14`**
+
+- [ ] **Step 4: Report** the run URL, the new tag list for one row, and the Renovate config summary. The Mend Renovate app installation on the account is the owner's step; say so in the report and in the README's development section.
