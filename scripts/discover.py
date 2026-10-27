@@ -55,7 +55,8 @@ def add_spark(rows, tags):
 
 
 def add_python(rows, tags):
-    """Add the highest patch of every Python line newer than any in rows to the rows of the highest Spark major."""
+    """Add the highest patch of every Python line newer than any in rows to the rows of the highest Spark major
+    whose newest Python line is the current newest; rows lagging behind are left alone."""
     rows = [dict(r) for r in rows]
     newest = max(vtuple(p)[:2] for r in rows for p in r["python"])
     lines = {}
@@ -66,12 +67,12 @@ def add_python(rows, tags):
             if version[:2] > newest:
                 lines[version[:2]] = max(lines.get(version[:2], version), version)
     top = max(vtuple(r["spark"])[0] for r in rows)
+    targets = [r for r in rows if vtuple(r["spark"])[0] == top and max(vtuple(p)[:2] for p in r["python"]) == newest]
     added = []
     for line in sorted(lines):
         full = ".".join(map(str, lines[line]))
-        for r in rows:
-            if vtuple(r["spark"])[0] == top:
-                r["python"] = sorted(r["python"] + [full], key=vtuple)
+        for r in targets:
+            r["python"] = sorted(r["python"] + [full], key=vtuple)
         added.append(f"python {line[0]}.{line[1]}")
     return rows, added
 

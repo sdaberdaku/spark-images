@@ -1,5 +1,7 @@
 # spark-images Implementation Plan
 
+This plan was executed. Later rulings recorded in the spec (`docs/superpowers/specs/2026-10-27-spark-images-design.md`) supersede the task text below: no dated tags, no cron, Renovate and daily discovery, arm64 in CI, 30-day untagged retention. The tasks are left as written.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Publish `ghcr.io/sdaberdaku/spark:<spark>-python<python>` images (official python-slim base + JRE + stock Spark + pandas/pyarrow) for the latest patch of every Spark minor from 3.5 up, on the Python versions each line supports, tested on every PR and rebuilt weekly.
