@@ -151,3 +151,25 @@ Expected: `cleanup` completes without deleting anything on the first run (nothin
 - [ ] **Step 3: Commit, push, PR, `ci-ok`, squash-merge, watch the publish run (all rows, cleanup), verify `docker manifest inspect ghcr.io/sdaberdaku/spark:4.2.0-python3.14.<x>` and `...:4.2.0-python3.14`**
 
 - [ ] **Step 4: Report** the run URL, the new tag list for one row, and the Renovate config summary. The Mend Renovate app installation on the account is the owner's step; say so in the report and in the README's development section.
+
+---
+
+### Task 6: Discovery of new Spark minor and major lines
+
+**Files:**
+- Create: `.github/workflows/discover.yml`, `scripts/discover.py`
+- Modify: `README.md` (one paragraph under the rebuild section), `renovate.json` (nothing unless the new file needs an exclusion)
+
+**Interfaces:**
+- `scripts/discover.py` (stdlib only, Python 3.12 on the runner): reads `images.json`; queries Docker Hub `https://hub.docker.com/v2/repositories/library/spark/tags?page_size=100&name=-ubuntu` (follow `next` pages) for tags matching `^(\d+)\.(\d+)\.(\d+)-scala(\d+\.\d+)-java(\d+)-ubuntu$`; groups by `major.minor`; ignores lines below 3.5 and lines already in `images.json`; for each new line picks the highest patch, Scala `2.13` when available (else the highest), Java `21` when available (else the highest), and the `python` list of the newest existing row; appends the rows in version order; writes `images.json` back (2-space indent, trailing newline); prints the added `major.minor` lines one per line; exit 0 in every case. A `--dry-run` flag prints without writing. Unit-tested in-process with a fake tag list (a small `tests/test_discover.py` using `unittest`, run with `python -m unittest`).
+- `discover.yml`: `on: schedule: cron "0 5 * * *"` (one API call a day, no builds) and `workflow_dispatch`; `permissions: contents: write, pull-requests: write, actions: write`; steps: checkout, `actions/setup-python@v7` 3.12, run `python scripts/discover.py`, capture the output; if empty, stop; else `git switch -c spark/<lines joined by ->` (e.g. `spark/4.3`), commit `feat(images): add Spark 4.3` as the github-actions bot (`github-actions[bot]` name and `41898282+github-actions[bot]@users.noreply.github.com` email), push, `gh pr create` with a plain-prose body listing the new rows and that rows failing the smoke test must be trimmed by hand, `gh workflow run ci.yml --ref <branch>` (a PR opened with `GITHUB_TOKEN` does not trigger `pull_request` workflows; the dispatched run reports `ci-ok` on the branch head commit, which is what the protection checks), then `gh pr merge --auto --squash`. Idempotent: if a branch or open PR for that line already exists, do nothing.
+- Repo setting `allow auto-merge` is already enabled.
+- README paragraph: new Spark minor and major lines are discovered daily and arrive as a pull request that auto-merges when every row passes the smoke test; a line whose Python versions are not all supported needs a hand edit of the row before merge.
+
+- [ ] **Step 1: Write `scripts/discover.py` with its unittest first (fake tags: existing 4.2.0 row, Docker Hub offering 4.2.1, 4.3.0, 5.0.0 with java21/25 and scala2.13; expect rows 4.3.0 and 5.0.0 added with java 21 and python copied, 4.2.1 ignored because the 4.2 line exists); run `python -m unittest tests/test_discover.py`**
+
+- [ ] **Step 2: Run `python scripts/discover.py --dry-run` against the live Docker Hub; expected: no new lines today (4.2 is the newest)**
+
+- [ ] **Step 3: Write `discover.yml`, lint it, commit on the Task 5 branch (same PR) or a follow-up branch if Task 5 already merged; after merge, `gh workflow run discover.yml` once and confirm it exits cleanly with nothing to add**
+
+- [ ] **Step 4: Report** the run URL and the dry-run output.
