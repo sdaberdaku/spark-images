@@ -18,9 +18,11 @@ The table below is generated from `images.json` by `scripts/render_readme.py` an
 | ----- | ----- | ---- | ------ | -------- |
 | 3.5.9 | 2.12 | 17 | 3.11.18 | `3.5.9-python3.11` |
 | 4.0.4 | 2.13 | 21 | 3.11.18, 3.12.16, 3.13.18 | `4.0.4-python3.11`, `4.0.4-python3.12`, `4.0.4-python3.13` |
-| 4.1.3 | 2.13 | 21 | 3.11.18, 3.12.16, 3.13.18, 3.14.10 | `4.1.3-python3.11`, `4.1.3-python3.12`, `4.1.3-python3.13`, `4.1.3-python3.14` |
-| 4.2.0 | 2.13 | 21 | 3.11.18, 3.12.16, 3.13.18, 3.14.10 | `4.2.0-python3.11`, `4.2.0-python3.12`, `4.2.0-python3.13`, `4.2.0-python3.14` |
+| 4.1.3 | 2.13 | 21 | 3.11.18, 3.12.16, 3.13.18, 3.14.10, 3.15.2 | `4.1.3-python3.11`, `4.1.3-python3.12`, `4.1.3-python3.13`, `4.1.3-python3.14`, `4.1.3-python3.15` |
+| 4.2.0 | 2.13 | 21 | 3.11.18, 3.12.16, 3.13.18, 3.14.10, 3.15.2 | `4.2.0-python3.11`, `4.2.0-python3.12`, `4.2.0-python3.13`, `4.2.0-python3.14`, `4.2.0-python3.15` |
 <!-- tags:end -->
+
+Python versions beyond what PySpark declares in its classifiers are published only when the smoke test passes.
 
 Spark 3.5.9 with Python 3.12 is not published. PySpark 3.5 imports `distutils`, which Python 3.12 removed, so `createDataFrame` from pandas fails (checked with `test/smoke.sh`).
 
