@@ -35,7 +35,9 @@ Python. This project publishes them: the official python image plus a JRE and th
    1.76 GB on disk and 641 MB compressed, against 2.4 GB / 851 MB for a single-stage build on the stock image.
 3. A smoke test that runs a PySpark job in the built image (DataFrame aggregate, Arrow `toPandas`, an RDD `map`
    through a Python worker) on every pull request, for every row, on amd64.
-4. Published on merge to `main`, weekly (picks up Python patch releases and base image updates) and on demand.
+4. Published on merge to `main`, weekly (picks up Python patch releases and base image updates) and on demand; every
+   publish run smoke-tests each row on amd64 before pushing it. Dated tags older than 90 days and unreferenced
+   untagged versions are deleted after each publish run; the floating tags are never deleted.
 
 ## Non-goals
 
