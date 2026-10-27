@@ -1,16 +1,20 @@
 """Add new Spark and Python lines found on Docker Hub to images.json.
 
 Prints one addition per line ("spark 4.3", "python 3.15"); prints nothing when
-there is nothing new. Always exits 0. Use --dry-run to print without writing.
+there is nothing new. Exits 0 on success, also when there is nothing to add; a
+Docker Hub error (after one retry) raises and fails the run. Use --dry-run to
+print without writing.
 
 Test hook: DISCOVER_FAKE_SPARK_TAGS (comma-separated Docker Hub tags, for
 example "4.3.0-scala2.13-java21-ubuntu") is added to the Spark tag list.
 """
+import argparse
 import json
 import os
 import pathlib
 import re
 import sys
+import time
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -83,22 +87,44 @@ def serialize(rows):
     return "[\n" + ",\n".join("  " + json.dumps(r) for r in rows) + "\n]\n"
 
 
+def fetch_page(url):
+    for attempt in (1, 2):
+        try:
+            with urllib.request.urlopen(url, timeout=30) as resp:
+                return json.load(resp)
+        except OSError:
+            if attempt == 2:
+                raise
+            time.sleep(5)
+
+
 def fetch_tags(repo, name):
     url, tags = HUB.format(repo, name), []
     while url:
-        with urllib.request.urlopen(url, timeout=30) as resp:
-            page = json.load(resp)
+        page = fetch_page(url)
         tags += [t["name"] for t in page["results"]]
         url = page.get("next")
     return tags
 
 
+def parse_args(argv):
+    parser = argparse.ArgumentParser(
+        description="Add new Spark and Python lines found on Docker Hub to images.json.",
+        epilog="Test-only hook: DISCOVER_FAKE_SPARK_TAGS holds comma-separated Docker Hub "
+        "Spark tags, for example 4.3.0-scala2.13-java21-ubuntu,4.3.0-scala2.13-java25-ubuntu; "
+        "they are added to the tags fetched from Docker Hub so the pull request path can be rehearsed.",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="print the additions without writing images.json")
+    return parser.parse_args(argv)
+
+
 def main(argv):
+    args = parse_args(argv)
     path = ROOT / "images.json"
     rows = json.loads(path.read_text())
     spark_tags = fetch_tags("spark", "-ubuntu") + [t for t in os.environ.get("DISCOVER_FAKE_SPARK_TAGS", "").split(",") if t]
     new_rows, added = discover(rows, spark_tags, fetch_tags("python", "-slim"))
-    if added and "--dry-run" not in argv:
+    if added and not args.dry_run:
         path.write_text(serialize(new_rows))
     if added:
         print("\n".join(added))
