@@ -22,10 +22,16 @@ Python. This project publishes them: the stock Spark image plus one uv-managed C
    - 4.2.0 (Scala 2.13, Java 21): Python 3.11, 3.12, 3.13, 3.14
    amd64 and arm64. Each build also pushes a minor-level tag `<major.minor>-python<python>` and a dated tag
    `<spark>-python<python>-<YYYYMMDD>` for pinning. Patch bumps are a one-line change in `images.json`.
-2. Contents: `FROM spark:<spark>-scala<scala>-java<java>-ubuntu` (the Python-less stock image), CPython from uv's
-   python-build-standalone in `/opt/python`, a venv in `/opt/venv` with `pandas` and `pyarrow` (Arrow and pandas
-   UDFs work out of the box), `PYSPARK_PYTHON` and `PYSPARK_DRIVER_PYTHON` set to the venv, `uv` removed from the
-   final image, `USER spark`. Works as a Spark on Kubernetes executor, driver and Spark Connect server image.
+2. Contents, built in stages so the final image is lean: `/opt/spark`, `/opt/entrypoint.sh` and `/opt/decom.sh`
+   copied from the stock `spark:<spark>-scala<scala>-java<java>-ubuntu` image; CPython from uv's
+   python-build-standalone in `/opt/python` (static library, test suite, idlelib and tkinter removed, no compiled
+   bytecode); a venv in `/opt/venv` with `pandas` and `pyarrow` (Arrow and pandas UDFs work out of the box); final
+   stage `eclipse-temurin:<java>-jre-jammy` (a JRE, the stock image ships a full JDK) with the stock image's apt
+   packages minus krb5-user, net-tools, wget and gnupg2, the same `spark` user (uid 185), `WORKDIR
+   /opt/spark/work-dir`, `ENTRYPOINT /opt/entrypoint.sh`, `PYSPARK_PYTHON` and `PYSPARK_DRIVER_PYTHON` set to the
+   venv. No `uv` in the final image. Works as a Spark on Kubernetes executor, driver and Spark Connect server
+   image. Measured on 4.2.0 / Python 3.14: 1.9 GB on disk and 676 MB compressed, against 2.4 GB / 851 MB for the
+   single-stage build on the stock image.
 3. A smoke test that runs a PySpark job in the built image (DataFrame aggregate, Arrow `toPandas`, an RDD `map`
    through a Python worker) on every pull request, for every row, on amd64.
 4. Published on merge to `main`, weekly (picks up Python patch releases and base image updates) and on demand.
