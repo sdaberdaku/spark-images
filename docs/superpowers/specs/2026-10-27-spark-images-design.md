@@ -29,8 +29,9 @@ Python. This project publishes them: the official python image plus a JRE and th
    image; `pandas` and `pyarrow` installed with pip, no compiled bytecode (Arrow and pandas UDFs work out of the
    box); the stock image's apt packages minus krb5-user, net-tools, wget and gnupg2; the same `spark` user (uid
    185), `WORKDIR /opt/spark/work-dir`, `ENTRYPOINT /opt/entrypoint.sh`; `PYSPARK_PYTHON` and
-   `PYSPARK_DRIVER_PYTHON` set to `/usr/local/bin/python`. No third-party Python builds or package managers. Works
-   as a Spark on Kubernetes executor, driver and Spark Connect server image. Measured on 4.2.0 / Python 3.14:
+   `PYSPARK_DRIVER_PYTHON` set to `/usr/local/bin/python`. No third-party Python builds or package managers. A
+   drop-in replacement for the stock image wherever it runs: Spark on Kubernetes executors and drivers, Spark
+   Connect servers, standalone clusters, `docker run ... spark-submit` on a laptop. Measured on 4.2.0 / Python 3.14:
    1.76 GB on disk and 641 MB compressed, against 2.4 GB / 851 MB for a single-stage build on the stock image.
 3. A smoke test that runs a PySpark job in the built image (DataFrame aggregate, Arrow `toPandas`, an RDD `map`
    through a Python worker) on every pull request, for every row, on amd64.
