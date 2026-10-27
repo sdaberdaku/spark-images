@@ -15,10 +15,6 @@ on:
         description: Cleanup only logs what it would delete
         type: boolean
         default: false
-      cleanup_older_than:
-        description: Minimum age of images the cleanup may delete
-        type: string
-        default: 90 days
 
 permissions:
   contents: read
@@ -56,7 +52,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - run: echo "DATE=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
       - name: Build for the smoke test
         uses: docker/build-push-action@v7
         with:
@@ -84,7 +79,6 @@ jobs:
             ghcr.io/sdaberdaku/spark:${{ matrix.spark }}-python${{ matrix.python_minor }}
             ghcr.io/sdaberdaku/spark:${{ matrix.spark }}-python${{ matrix.python }}
             ghcr.io/sdaberdaku/spark:${{ matrix.minor }}-python${{ matrix.python_minor }}
-            ghcr.io/sdaberdaku/spark:${{ matrix.spark }}-python${{ matrix.python_minor }}-${{ env.DATE }}
           build-args: |
             SPARK_VERSION=${{ matrix.spark }}
             SCALA_VERSION=${{ matrix.scala }}
@@ -105,8 +99,5 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           owner: sdaberdaku
           package: spark
-          older-than: ${{ inputs.cleanup_older_than || '90 days' }}
-          use-regex: true
-          delete-tags: '^.*-20[0-9]{6}$'
           delete-untagged: true
           dry-run: ${{ inputs.cleanup_dry_run || false }}
