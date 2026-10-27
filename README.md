@@ -35,7 +35,7 @@ The table below is generated from `images.json` by `scripts/render_readme.py`; d
 Spark 3.5.9 with Python 3.12 is not published. PySpark 3.5 imports `distutils`, which Python 3.12 removed, so `createDataFrame` from pandas fails (checked with `test/smoke.sh`). Python versions beyond what PySpark declares in its classifiers are published only when the smoke test passes.
 
 ```bash
-docker pull ghcr.io/sdaberdaku/spark:4.2.0-python3.14
+docker pull ghcr.io/sdaberdaku/spark:4.2-python3.14
 ```
 
 ## Usage
@@ -43,7 +43,7 @@ docker pull ghcr.io/sdaberdaku/spark:4.2.0-python3.14
 Locally with Docker:
 
 ```bash
-docker run --rm -v "$PWD/job.py:/tmp/job.py:ro" ghcr.io/sdaberdaku/spark:4.2.0-python3.14 \
+docker run --rm -v "$PWD/job.py:/tmp/job.py:ro" ghcr.io/sdaberdaku/spark:4.2-python3.14 \
   /opt/spark/bin/spark-submit --master 'local[2]' /tmp/job.py
 ```
 
@@ -53,25 +53,25 @@ Spark on Kubernetes, with the image used for both driver and executors. The job 
 spark-submit \
   --master k8s://https://<api-server> \
   --deploy-mode cluster \
-  --conf spark.kubernetes.container.image=ghcr.io/sdaberdaku/spark:4.2.0-python3.14 \
+  --conf spark.kubernetes.container.image=ghcr.io/sdaberdaku/spark:4.2-python3.14 \
   local:///opt/spark/work-dir/job.py
 ```
 
 Spark Connect server (Spark 4.x, default port 15002):
 
 ```bash
-docker run --rm -p 15002:15002 -e SPARK_NO_DAEMONIZE=1 ghcr.io/sdaberdaku/spark:4.2.0-python3.14 \
+docker run --rm -p 15002:15002 -e SPARK_NO_DAEMONIZE=1 ghcr.io/sdaberdaku/spark:4.2-python3.14 \
   /opt/spark/sbin/start-connect-server.sh
 ```
 
-Spark 4 images bundle the Connect server in the main distribution. On 3.5 add `--packages org.apache.spark:spark-connect_2.12:3.5.9`. `SPARK_NO_DAEMONIZE=1` keeps the start script in the foreground so the container stays up.
+Spark 4 images bundle the Connect server in the main distribution. On 3.5 add `--packages org.apache.spark:spark-connect_2.12:<spark version>`. `SPARK_NO_DAEMONIZE=1` keeps the start script in the foreground so the container stays up.
 
 Standalone cluster:
 
 ```bash
-docker run -d --name master --network host ghcr.io/sdaberdaku/spark:4.2.0-python3.14 \
+docker run -d --name master --network host ghcr.io/sdaberdaku/spark:4.2-python3.14 \
   /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
-docker run -d --network host ghcr.io/sdaberdaku/spark:4.2.0-python3.14 \
+docker run -d --network host ghcr.io/sdaberdaku/spark:4.2-python3.14 \
   /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://localhost:7077
 ```
 
@@ -96,7 +96,7 @@ The difference comes from the JRE instead of the full JDK, the Debian slim base,
 ## Extending with jars
 
 ```dockerfile
-FROM ghcr.io/sdaberdaku/spark:4.2.0-python3.14
+FROM ghcr.io/sdaberdaku/spark:4.2-python3.14
 ADD https://repo1.maven.org/maven2/org/example/lib/1.0/lib-1.0.jar /opt/spark/jars/
 ```
 
@@ -104,19 +104,19 @@ The `spark` user owns `/opt/spark`. If you use `ADD` with a URL, add `--chown=sp
 
 ## Rebuilds
 
-Everything that goes into an image is pinned: the Spark version and the Python patch version in `images.json`, and pandas and pyarrow in `requirements.txt`. Images are rebuilt when a Renovate pull request bumps one of them. Renovate proposes patch updates per row. Tags always point to the latest build. Every row is smoke-tested before it is pushed, so a row that fails the test keeps its previous image.
+Everything that goes into an image is pinned: the Spark version and the Python patch version in `images.json`, and pandas and pyarrow in `requirements.txt`. Images are rebuilt when a Renovate pull request bumps one of them. Renovate proposes Spark and Python patch updates per row. Tags always point to the latest build. Every row is smoke-tested before it is pushed, so a row that fails the test keeps its previous image.
 
 New Spark minor and major lines, and new Python lines, are discovered daily by the Discover workflow, which compares Docker Hub with `images.json` and opens a pull request on a `discover/<yyyymmdd>` branch with the commit `feat(images): add <additions>`. The pull request renders the README table and merges itself once every row passes the smoke test. A row whose Python versions are not all supported by that Spark line needs a hand edit before the merge.
 
 OS-level fixes that do not change a tag (a new Debian package build, for example) are not picked up until the next rebuild. That gap is accepted.
 
-Tags are never deleted. A rebuild moves the tag to the new image, and the old image stays only until the next cleanup removes unreferenced untagged versions. The Publish workflow runs the cleanup after each publish, and can run it alone from the Actions tab (inputs `only_cleanup` and `cleanup_dry_run`). For a reproducible pin use the image digest (`ghcr.io/sdaberdaku/spark@sha256:...`), which Renovate can also keep updated.
+Tags are never deleted. A rebuild moves the tag to the new image, and the old image becomes an untagged version that the cleanup removes once it is 30 days old. The Publish workflow runs the cleanup after each publish, and can run it alone from the Actions tab (inputs `only_cleanup` and `cleanup_dry_run`). For a reproducible pin use the image digest (`ghcr.io/sdaberdaku/spark@sha256:...`), which Renovate can also keep updated. A digest pin stays pullable for at least 30 days after its tag moves, so bump the pin within that time. Publishing runs only when a change touches the Dockerfile, `images.json`, `requirements.txt`, `test/` or the publish workflow, so unrelated merges leave existing digests alone.
 
 ## Development
 
-`renovate.json` configures Renovate. The Mend Renovate app must be installed on the repository for the configuration to act. Patch updates, GitHub Actions updates and minor or patch updates of pandas and pyarrow are merged automatically once `ci-ok` passes.
+`renovate.json` configures Renovate. The Mend Renovate app must be installed on the repository for the configuration to act. Non-major updates (Spark and Python patches, GitHub Actions, pandas and pyarrow) arrive as one weekly pull request, which merges itself once `ci-ok` passes.
 
-The CI `readme` job fails when the tag table does not match `images.json`. Render it with `python scripts/render_readme.py` and run the unit tests with `python -m unittest tests/test_render_readme.py`.
+The CI `checks` job runs all unit tests and fails when the tag table does not match `images.json`. Render it with `python scripts/render_readme.py` and run the unit tests with `python -m unittest discover -s tests`.
 
 ### Adding a row
 
@@ -130,7 +130,7 @@ docker build --build-arg SPARK_VERSION=4.2.0 --build-arg SCALA_VERSION=2.13 \
 bash test/smoke.sh spark-local:4.2.0-python3.14 3.14.10
 ```
 
-The smoke test checks the uid, the Python version, a Spark SQL job, an Arrow conversion, an RDD job with a Python lambda, the pandas and pyarrow imports and the stock entrypoint.
+The CI `build` job runs every row on amd64 and arm64. The smoke test checks the uid, the Python version, a Spark SQL job, an Arrow conversion, an RDD job with a Python lambda, the pandas and pyarrow imports and the stock entrypoint.
 
 ## License
 

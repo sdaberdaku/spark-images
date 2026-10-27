@@ -1,10 +1,12 @@
 # Builds every row of images.json, smoke-tests it on amd64, then pushes a
-# multi-arch image. Runs on pushes to main (Renovate pull requests bump the inputs).
+# multi-arch image. Runs on pushes to main that touch the image inputs (Renovate
+# pull requests bump them); the push step reuses the smoke build's layers.
 name: Publish
 
 on:
   push:
     branches: [main]
+    paths: [Dockerfile, images.json, requirements.txt, "test/**", .github/workflows/publish.yml]
   workflow_dispatch:
     inputs:
       only_cleanup:
@@ -36,7 +38,7 @@ jobs:
 
   publish:
     needs: plan
-    if: ${{ !inputs.only_cleanup }}
+    if: ${{ !inputs.only_cleanup && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -65,8 +67,6 @@ jobs:
             SCALA_VERSION=${{ matrix.scala }}
             JAVA_VERSION=${{ matrix.java }}
             PYTHON_VERSION=${{ matrix.python }}
-          cache-from: type=gha,scope=${{ matrix.spark }}-${{ matrix.python }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.spark }}-${{ matrix.python }}
       - run: bash test/smoke.sh spark-smoke:${{ matrix.spark }}-python${{ matrix.python }} ${{ matrix.python }}
       - name: Push multi-arch image
         uses: docker/build-push-action@v7
@@ -84,8 +84,6 @@ jobs:
             SCALA_VERSION=${{ matrix.scala }}
             JAVA_VERSION=${{ matrix.java }}
             PYTHON_VERSION=${{ matrix.python }}
-          cache-from: type=gha,scope=${{ matrix.spark }}-${{ matrix.python }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.spark }}-${{ matrix.python }}
 
   cleanup:
     needs: publish
@@ -94,10 +92,12 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: dataaxiom/ghcr-cleanup-action@v1
+      - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           owner: sdaberdaku
           package: spark
           delete-untagged: true
+          older-than: 30 days
+          validate: true
           dry-run: ${{ inputs.cleanup_dry_run || false }}

@@ -57,6 +57,13 @@ class PythonTest(unittest.TestCase):
         self.assertEqual(rows[0]["python"], ["3.11.18"])
         self.assertEqual(rows[1]["python"], ["3.13.18", "3.14.10", "3.15.1"])
 
+    def test_rows_lagging_behind_the_newest_python_are_left_alone(self):
+        lagging = [dict(ROWS[1], spark="4.1.3", python=["3.12.16", "3.13.18"]), ROWS[1]]
+        rows, added = discover.add_python(lagging, ["3.15.1-slim"])
+        self.assertEqual(added, ["python 3.15"])
+        self.assertEqual(rows[0]["python"], ["3.12.16", "3.13.18"])
+        self.assertEqual(rows[1]["python"], ["3.13.18", "3.14.10", "3.15.1"])
+
     def test_old_line_patch_and_prereleases_ignored(self):
         rows, added = discover.add_python(ROWS, ["3.14.11-slim", "3.15.0rc1-slim", "3.12.2-slim", "3.15.0-slim-bookworm"])
         self.assertEqual((rows, added), (ROWS, []))
