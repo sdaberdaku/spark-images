@@ -21,6 +21,7 @@
     }
   ],
   "packageRules": [
+    {"matchDepNames": ["spark", "python"], "separateMinorPatch": true},
     {"matchDepNames": ["spark", "python"], "matchUpdateTypes": ["minor", "major"], "enabled": false},
     {"matchUpdateTypes": ["patch", "pin", "digest"], "automerge": true},
     {"matchManagers": ["github-actions"], "automerge": true},
